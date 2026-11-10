@@ -2,19 +2,23 @@
 
 import { longDate, type ActivityDTO, type TaskStatus } from "@gorev/shared";
 import { useSession } from "@/hooks/useSession";
-import { fullDateTime, timeAgo } from "@/lib/utils";
+import { fullDateTime, peopleText, timeAgo } from "@/lib/utils";
 
 /** "Ayşe Yılmaz tamamladı" / "Sen tamamladın" */
 function sentence(a: ActivityDTO, meId: string): string {
   const self = a.user.id === meId;
   const v = (third: string, second: string) => (self ? second : third);
   const m = (a.meta ?? {}) as Record<string, unknown>;
-  const target = (id: unknown, name: unknown) => (id === meId ? "sana" : `${String(name)} kişisine`);
+  type P = { id: string; name: string };
+  const list = (x: unknown): P[] => (Array.isArray(x) ? (x as P[]) : []);
+  const names = (people: P[]) => peopleText(people, meId, "Sen", 4);
   switch (a.type) {
-    case "CREATED":
-      return m.assigneeId && m.assigneeId !== a.user.id
-        ? `görevi ${target(m.assigneeId, m.assigneeName)} ${v("verdi", "verdin")}`
-        : v("görevi oluşturdu", "görevi oluşturdun");
+    case "CREATED": {
+      // Yeni kayıtlar: { assignees: [...] } · eski kayıtlar: { assigneeId, assigneeName }
+      const people = m.assignees ? list(m.assignees) : m.assigneeId ? [{ id: String(m.assigneeId), name: String(m.assigneeName) }] : [];
+      const onlySelf = people.length === 0 || (people.length === 1 && people[0].id === a.user.id);
+      return onlySelf ? v("görevi oluşturdu", "görevi oluşturdun") : `${v("görevi verdi", "görevi verdin")}: ${names(people)}`;
+    }
     case "STATUS": {
       const to = m.to as TaskStatus;
       if (to === "DONE") return v("tamamladı", "tamamladın");
@@ -23,8 +27,19 @@ function sentence(a: ActivityDTO, meId: string): string {
     }
     case "COMMENT":
       return v("not ekledi", "not ekledin");
-    case "ASSIGNEE":
-      return `görevi ${target(m.toId, m.toName)} ${v("verdi", "verdin")}`;
+    case "ASSIGNEE": {
+      if (!m.added && !m.removed) {
+        // eski tek-sorumlu kaydı
+        return `${v("görevi verdi", "görevi verdin")}: ${m.toId === meId ? "Sen" : String(m.toName)}`;
+      }
+      const added = list(m.added);
+      const removed = list(m.removed);
+      if (added.length && removed.length) {
+        return `${v("yapanları değiştirdi", "yapanları değiştirdin")} · eklenen: ${names(added)} · çıkan: ${names(removed)}`;
+      }
+      if (added.length) return `${v("yapanlara ekledi", "yapanlara ekledin")}: ${names(added)}`;
+      return `${v("yapanlardan çıkardı", "yapanlardan çıkardın")}: ${names(removed)}`;
+    }
     case "DUE_DATE":
       return m.to ? `son tarihi ${longDate(String(m.to))} ${v("yaptı", "yaptın")}` : v("son tarihi kaldırdı", "son tarihi kaldırdın");
     case "TITLE":

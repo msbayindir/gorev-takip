@@ -46,3 +46,13 @@ export function randomPassword(len = 10): string {
   crypto.getRandomValues(arr);
   return Array.from(arr, (n) => chars[n % chars.length]).join("");
 }
+
+/**
+ * Kişi listesini okunur metne çevirir: "Ayşe Yılmaz, Mehmet Demir" · çok kişide "Ayşe Yılmaz, Mehmet Demir ve 2 kişi daha".
+ * Oturum sahibi `meLabel` ile yazılır ("Sen" / "Ben").
+ */
+export function peopleText(people: { id: string; name: string }[], meId: string, meLabel = "Sen", max = 3): string {
+  const names = [...people].sort((a, b) => Number(b.id === meId) - Number(a.id === meId)).map((p) => (p.id === meId ? meLabel : p.name));
+  if (names.length <= max) return names.join(", ");
+  return `${names.slice(0, 2).join(", ")} ve ${names.length - 2} kişi daha`;
+}

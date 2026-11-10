@@ -12,11 +12,11 @@ export const usersRouter = Router();
 usersRouter.get("/", async (_req, res) => {
   const [users, open] = await Promise.all([
     prisma.user.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
-    prisma.task.groupBy({ by: ["assigneeId"], _count: { _all: true }, where: { status: { in: OPEN_STATUSES } } }),
+    prisma.taskAssignee.groupBy({ by: ["userId"], _count: { _all: true }, where: { task: { status: { in: OPEN_STATUSES } } } }),
   ]);
   const result: UserWithStats[] = users.map((u) => ({
     ...toUserLite(u),
-    openCount: open.find((o) => o.assigneeId === u.id)?._count._all ?? 0,
+    openCount: open.find((o) => o.userId === u.id)?._count._all ?? 0,
   }));
   res.json({ users: result });
 });
@@ -55,7 +55,8 @@ usersRouter.patch("/:id", requireAdmin, async (req, res) => {
 });
 
 /**
- * Ekipten çıkar. Açık görevleri, görevi veren kişiye geçer; veren de çıkarılan kişiyse çıkaran yöneticiye.
+ * Ekipten çıkar. Kişi açık görevlerden düşer; görevde başka yapan kalmazsa görev, görevi veren kişiye geçer
+ * (veren de çıkarılan kişiyse ya da ekipte değilse çıkaran yöneticiye).
  * Geçmişi olan kişi silinmez, pasife alınır (kayıtlar korunur).
  */
 usersRouter.delete("/:id", requireAdmin, async (req, res) => {
@@ -66,20 +67,24 @@ usersRouter.delete("/:id", requireAdmin, async (req, res) => {
   if (!target || !target.active) throw notFound("Kişi");
 
   const openTasks = await prisma.task.findMany({
-    where: { assigneeId: id, status: { in: OPEN_STATUSES } },
-    include: { creator: true },
+    where: { status: { in: OPEN_STATUSES }, assignees: { some: { userId: id } } },
+    include: { creator: true, assignees: true },
   });
   for (const t of openTasks) {
-    const to = t.creatorId === id || !t.creator.active ? me : t.creator;
+    const others = t.assignees.filter((a) => a.userId !== id);
+    const to = others.length ? null : t.creatorId === id || !t.creator.active ? me : t.creator;
     await prisma.$transaction([
-      prisma.task.update({ where: { id: t.id }, data: { assigneeId: to.id } }),
+      prisma.taskAssignee.delete({ where: { taskId_userId: { taskId: t.id, userId: id } } }),
+      ...(to ? [prisma.taskAssignee.create({ data: { taskId: t.id, userId: to.id } })] : []),
       prisma.activity.create({
         data: {
           taskId: t.id,
           userId: me.id,
           type: "ASSIGNEE",
-          message: `${target.name} ekipten çıkarıldığı için görev ${to.name} kişisine geçti`,
-          meta: { fromId: id, fromName: target.name, toId: to.id, toName: to.name },
+          message: to
+            ? `${target.name} ekipten çıkarıldığı için görev ${to.name} kişisine geçti`
+            : `${target.name} ekipten çıkarıldığı için görevden çıkarıldı`,
+          meta: { added: to ? [{ id: to.id, name: to.name }] : [], removed: [{ id, name: target.name }] },
         },
       }),
     ]);
@@ -87,10 +92,10 @@ usersRouter.delete("/:id", requireAdmin, async (req, res) => {
 
   const refs = await prisma.user.findUnique({
     where: { id },
-    include: { _count: { select: { createdTasks: true, assignedTasks: true, activities: true } } },
+    include: { _count: { select: { createdTasks: true, assignments: true, activities: true } } },
   });
   const c = refs!._count;
-  if (c.createdTasks + c.assignedTasks + c.activities === 0) {
+  if (c.createdTasks + c.assignments + c.activities === 0) {
     await prisma.user.delete({ where: { id } });
   } else {
     await prisma.user.update({ where: { id }, data: { active: false } });

@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { canAddNote, canChangeStatus, canEdit, longDate, type TaskDetailDTO } from "@gorev/shared";
+import { canAddNote, canChangeStatus, canEdit, longDate, permTask, type TaskDetailDTO } from "@gorev/shared";
 import { X } from "lucide-react";
 import { useAddNote, useDeleteTask, useTask, useUpdateTask, useUsers } from "@/lib/queries";
 import { errorMessage } from "@/lib/api";
 import { useTaskDrawer } from "@/hooks/useTaskDrawer";
 import { useSession } from "@/hooks/useSession";
+import { peopleText } from "@/lib/utils";
 import { ActivityItem } from "./ActivityItem";
+import { PeoplePicker } from "./PeoplePicker";
 import { DueText, StatusPill } from "./TaskIcons";
 import { TaskActions } from "./TaskActions";
 import { useToast } from "./Toast";
@@ -58,7 +60,7 @@ export function TaskDrawer() {
 
 function Detail({ task, onClose }: { task: TaskDetailDTO; onClose: () => void }) {
   const me = useSession();
-  const perm = { creatorId: task.creator.id, assigneeId: task.assignee.id };
+  const perm = permTask(task);
   const isDoer = canChangeStatus(me, perm);
   const editable = canEdit(me, perm);
   const noteable = canAddNote(me, perm);
@@ -92,10 +94,14 @@ function Detail({ task, onClose }: { task: TaskDetailDTO; onClose: () => void })
           <dl className="grid grid-cols-[104px_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-base">
             <dt className="text-ink-muted">Veren</dt>
             <dd className="font-semibold text-ink">{name(task.creator)}</dd>
-            <dt className="text-ink-muted">Yapan</dt>
-            <dd className="font-semibold text-ink">
-              {name(task.assignee)}
-              {!task.assignee.active && <span className="font-normal text-ink-muted"> (ekipten ayrıldı)</span>}
+            <dt className="text-ink-muted">{task.assignees.length > 1 ? "Yapanlar" : "Yapan"}</dt>
+            <dd className="flex flex-col font-semibold text-ink">
+              {task.assignees.map((a) => (
+                <span key={a.id}>
+                  {name(a)}
+                  {!a.active && <span className="font-normal text-ink-muted"> (ekipten ayrıldı)</span>}
+                </span>
+              ))}
             </dd>
             <dt className="text-ink-muted">Son tarih</dt>
             <dd className="text-ink">
@@ -122,7 +128,11 @@ function Detail({ task, onClose }: { task: TaskDetailDTO; onClose: () => void })
           {isDoer ? (
             <TaskActions task={task} size="lg" className="[&>button]:flex-1" />
           ) : (
-            task.status !== "DONE" && <p className="rounded-md bg-paper px-4 py-3 text-base text-ink-muted">Durumu yalnızca {task.assignee.name} değiştirebilir.</p>
+            task.status !== "DONE" && (
+              <p className="rounded-md bg-paper px-4 py-3 text-base text-ink-muted">
+                Durumu yalnızca görevi yapan{task.assignees.length > 1 ? "lar" : ""} değiştirebilir: {peopleText(task.assignees, me.id)}.
+              </p>
+            )
           )}
 
           {task.description && (
@@ -184,7 +194,7 @@ function EditModal({ task, onClose }: { task: TaskDetailDTO; onClose: () => void
   const update = useUpdateTask();
   const toast = useToast();
   const [title, setTitle] = useState(task.title);
-  const [assigneeId, setAssigneeId] = useState(task.assignee.id);
+  const [assigneeIds, setAssigneeIds] = useState(task.assignees.map((a) => a.id));
   const [dueDate, setDueDate] = useState(task.dueDate ?? "");
   const [description, setDescription] = useState(task.description ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -192,8 +202,12 @@ function EditModal({ task, onClose }: { task: TaskDetailDTO; onClose: () => void
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (!assigneeIds.length) {
+      setError("Görevi en az bir kişiye ver.");
+      return;
+    }
     try {
-      await update.mutateAsync({ id: task.id, title, assigneeId, dueDate: dueDate || null, description: description || null });
+      await update.mutateAsync({ id: task.id, title, assigneeIds, dueDate: dueDate || null, description: description || null });
       toast("Görev kaydedildi.");
       onClose();
     } catch (err) {
@@ -201,7 +215,9 @@ function EditModal({ task, onClose }: { task: TaskDetailDTO; onClose: () => void
     }
   };
 
-  const people = users.some((u) => u.id === task.assignee.id) ? users : [task.assignee, ...users];
+  // Ekipten ayrılmış ama hâlâ görevde görünen kişiler de listede kalsın
+  const people = [...users, ...task.assignees.filter((a) => !users.some((u) => u.id === a.id))];
+  const kimeId = useId();
 
   return (
     <Modal open onClose={onClose} title="Görevi düzenle">
@@ -209,15 +225,12 @@ function EditModal({ task, onClose }: { task: TaskDetailDTO; onClose: () => void
         <Field label="Ne yapılacak?">
           <Input value={title} onChange={(e) => setTitle(e.target.value)} required />
         </Field>
-        <Field label="Kime?">
-          <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className="h-11 w-full cursor-pointer rounded-md border border-line-strong bg-surface px-3 text-base text-ink">
-            {people.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.id === me.id ? "Ben" : u.name}
-              </option>
-            ))}
-          </select>
-        </Field>
+        <div className="space-y-1.5">
+          <span id={kimeId} className="block text-[15px] font-semibold text-ink">
+            Kime?
+          </span>
+          <PeoplePicker users={people} meId={me.id} value={assigneeIds} onChange={setAssigneeIds} labelledBy={kimeId} />
+        </div>
         <Field label="Son tarih">
           <div className="flex gap-2">
             <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />

@@ -6,9 +6,16 @@ const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Tarih YYYY-AA-GG biçi
 export const taskStatusSchema = z.enum(TASK_STATUSES);
 export const roleSchema = z.enum(ROLES);
 
+const assigneeIdsSchema = z
+  .array(z.string().min(1))
+  .min(1, "Görevi en az bir kişiye ver")
+  .max(20, "Bir görev en fazla 20 kişiye verilebilir")
+  .transform((ids) => Array.from(new Set(ids)));
+
 export const createTaskSchema = z.object({
   title: z.string().trim().min(1, "Ne yapılacağını yaz").max(300),
-  assigneeId: z.string().min(1, "Görevi kime verdiğini seç"),
+  /** Görevi yapacak kişiler (en az bir) */
+  assigneeIds: assigneeIdsSchema,
   dueDate: dateOnly.nullish(),
   description: z.string().max(20000).nullish(),
 });
@@ -16,7 +23,7 @@ export type CreateTaskInput = z.input<typeof createTaskSchema>;
 
 export const updateTaskSchema = z.object({
   title: z.string().trim().min(1, "Başlık boş olamaz").max(300).optional(),
-  assigneeId: z.string().min(1).optional(),
+  assigneeIds: assigneeIdsSchema.optional(),
   dueDate: dateOnly.nullish(),
   description: z.string().max(20000).nullish(),
 });

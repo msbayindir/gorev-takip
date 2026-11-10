@@ -18,7 +18,7 @@ docs/
 
 ## Nasıl çalışır?
 
-- **Görev ver:** "Ne yapılacak?", "Kime?" (varsayılan: Ben) ve isteğe bağlı "Ne zamana?" seç, "Ekle"ye bas.
+- **Görev ver:** "Ne yapılacak?", "Kime?" (varsayılan: Ben) ve isteğe bağlı "Ne zamana?" seç, "Ekle"ye bas. "Kime?" ile görevi **bir ya da birden fazla kişiye** verebilirsin; listede her kişinin yanında bir onay kutusu var.
 - **Durumlar:** Yapılacak · Devam ediyor · Tamamlandı. Görevi yapan kişi satırdaki **Başla**, **Tamamla** ya da **Geri al** düğmesine basar. Tamamladıktan sonra bildirimdeki "Geri al" ile vazgeçilebilir.
 - **Sayfalar:**
   - **Görevlerim:** bana verilenler.
@@ -27,10 +27,10 @@ docs/
   - Görevlerim ve Verdiğim görevler, **Liste** ya da **Pano** olarak görülebilir.
 - **Görev detayı:** kim verdi, kim yapıyor, son tarih, açıklama, **Not ekle** ve geçmiş (kim, ne zaman, ne yaptı).
 - **Yetkiler** (API'de zorunlu, [`permissions.ts`](packages/shared/src/permissions.ts)):
-  - Durumu **yalnızca görevi yapan kişi** değiştirir; görevi veren de, yönetici de değiştiremez.
+  - Durumu **yalnızca görevi yapanlar** değiştirir; görevi veren de, yönetici de değiştiremez. Görev birden fazla kişiye verildiyse durum ortaktır: bu kişilerden biri "Tamamla" deyince görev herkes için tamamlanır.
   - Görevi düzenlemek ve silmek: görevi veren kişi ya da yönetici.
-  - Not eklemek: görevi yapan, veren ya da yönetici.
-  - Kişi eklemek, şifre sıfırlamak ve kişiyi çıkarmak: yönetici. Çıkarılan kişinin açık görevleri görevi verenlere geri döner. Aynı e-posta tekrar eklenirse hesap yeniden açılır.
+  - Not eklemek: görevi yapanlar, veren ya da yönetici.
+  - Kişi eklemek, şifre sıfırlamak ve kişiyi çıkarmak: yönetici. Çıkarılan kişi açık görevlerden düşer; görevde başka yapan kalmazsa görev, onu verene geri döner. Aynı e-posta tekrar eklenirse hesap yeniden açılır.
 
 ## Kurulum
 

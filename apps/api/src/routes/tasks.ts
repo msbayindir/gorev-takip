@@ -15,11 +15,12 @@ tasksRouter.get("/", async (req, res) => {
   const me = currentUser(req);
   const q = taskQuerySchema.parse(req.query);
   const where: Prisma.TaskWhereInput = {};
-  if (q.scope === "mine") where.assigneeId = me.id;
-  if (q.scope === "given") Object.assign(where, { creatorId: me.id, NOT: { assigneeId: me.id } });
+  // mine: yapanlar arasında ben varım · given: ben verdim ve başkası da yapıyor · user: o kişi yapanlar arasında
+  if (q.scope === "mine") where.assignees = { some: { userId: me.id } };
+  if (q.scope === "given") Object.assign(where, { creatorId: me.id, assignees: { some: { userId: { not: me.id } } } });
   if (q.scope === "user") {
     if (!q.userId) throw new HttpError(400, "Kişi seçilmedi");
-    where.assigneeId = q.userId;
+    where.assignees = { some: { userId: q.userId } };
   }
   if (q.status === "open") where.status = { in: OPEN_STATUSES };
   if (q.status === "done") where.status = "DONE";

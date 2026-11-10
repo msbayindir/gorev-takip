@@ -39,8 +39,8 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  createdTasks  Task[]     @relation("TaskCreator")
-  assignedTasks Task[]     @relation("TaskAssignee")
+  createdTasks  Task[]         @relation("TaskCreator")
+  assignments   TaskAssignee[]
   activities    Activity[]
 
   @@map("users")
@@ -55,17 +55,28 @@ model Task {
   dueDate     DateTime?  @db.Date
   creatorId   String
   creator     User       @relation("TaskCreator", fields: [creatorId], references: [id])
-  assigneeId  String
-  assignee    User       @relation("TaskAssignee", fields: [assigneeId], references: [id])
   completedAt DateTime?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
+  assignees  TaskAssignee[]
   activities Activity[]
 
-  @@index([assigneeId, status])
   @@index([creatorId, status])
   @@map("tasks")
+}
+
+/// Görevi yapan kişiler. Bir görev birden fazla kişiye verilebilir; durum hepsi için ortaktır.
+model TaskAssignee {
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@id([taskId, userId])
+  @@index([userId])
+  @@map("task_assignees")
 }
 
 model Activity {

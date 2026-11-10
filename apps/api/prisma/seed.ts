@@ -43,31 +43,32 @@ async function main() {
     description?: string;
     status: TaskStatus;
     from: User;
-    to: User;
+    /** görevi yapacak kişiler */
+    to: User[];
     due?: number;
     createdHoursAgo: number;
     log?: Log[];
   };
 
   const seeds: Seed[] = [
-    { title: "Müşteri X için teklif dosyası", status: "TODO", from: zeynep, to: selin, due: 0, createdHoursAgo: 20 },
-    { title: "Ofis internet hattı yenileme", status: "TODO", from: can, to: selin, due: 3, createdHoursAgo: 15 },
+    { title: "Müşteri X için teklif dosyası", status: "TODO", from: zeynep, to: [selin], due: 0, createdHoursAgo: 20 },
+    { title: "Ofis internet hattı yenileme", status: "TODO", from: can, to: [selin], due: 3, createdHoursAgo: 15 },
     {
       title: "Bayi sözleşmesini gözden geçir",
       description: "3. madde (ödeme vadesi) bayiyle konuşulup netleşecek.",
       status: "IN_PROGRESS",
       from: selin,
-      to: selin,
+      to: [selin],
       due: -2,
       createdHoursAgo: 96,
       log: [{ by: selin, type: "STATUS", to: "IN_PROGRESS", message: "Bayiyle görüştüm, 3. maddeyi revize edip gönderecekler.", hoursAgo: 24 }],
     },
     {
       title: "Yeni web sitesi ana sayfa tasarımı",
-      description: "Kurumsal kimliğe uygun, mobil uyumlu ana sayfa taslağı.",
+      description: "Kurumsal kimliğe uygun, mobil uyumlu ana sayfa taslağı. Ayşe tasarımı, Mehmet kodlamayı yapacak.",
       status: "IN_PROGRESS",
       from: selin,
-      to: ayse,
+      to: [ayse, mehmet],
       due: 2,
       createdHoursAgo: 72,
       log: [{ by: ayse, type: "STATUS", to: "IN_PROGRESS", message: "Masaüstü taslak bitti, mobil tarafa geçiyorum.", hoursAgo: 5 }],
@@ -77,7 +78,7 @@ async function main() {
       description: "Gece yedeği son 3 gündür hata veriyor.",
       status: "IN_PROGRESS",
       from: selin,
-      to: mehmet,
+      to: [mehmet],
       due: -1,
       createdHoursAgo: 50,
       log: [
@@ -85,13 +86,13 @@ async function main() {
         { by: mehmet, type: "COMMENT", message: "Hosting firmasından disk erişim yetkisi bekliyorum.", hoursAgo: 8 },
       ],
     },
-    { title: "Çeyrek bütçe raporu", status: "TODO", from: selin, to: can, due: 9, createdHoursAgo: 6 },
-    { title: "Bayi toplantısı sunumu", status: "TODO", from: zeynep, to: ayse, due: 6, createdHoursAgo: 10 },
+    { title: "Çeyrek bütçe raporu", status: "TODO", from: selin, to: [can], due: 9, createdHoursAgo: 6 },
+    { title: "Bayi toplantısı sunumu", status: "TODO", from: zeynep, to: [ayse, zeynep, selin], due: 6, createdHoursAgo: 10 },
     {
       title: "Ekim ayı faturalarının kontrolü",
       status: "DONE",
       from: selin,
-      to: can,
+      to: [can],
       due: -2,
       createdHoursAgo: 120,
       log: [{ by: can, type: "STATUS", to: "DONE", message: "Tüm faturalar kontrol edildi, 2 hatalı fatura iade edildi.", hoursAgo: 26 }],
@@ -100,7 +101,7 @@ async function main() {
       title: "Sosyal medya kasım içerik takvimi",
       status: "DONE",
       from: zeynep,
-      to: ayse,
+      to: [ayse],
       createdHoursAgo: 96,
       log: [{ by: ayse, type: "STATUS", to: "DONE", message: "Takvim paylaşıldı.", hoursAgo: 12 }],
     },
@@ -108,7 +109,7 @@ async function main() {
       title: "Müşteri listesini güncelle",
       status: "DONE",
       from: selin,
-      to: selin,
+      to: [selin],
       createdHoursAgo: 60,
       log: [{ by: selin, type: "STATUS", to: "DONE", hoursAgo: 30 }],
     },
@@ -123,7 +124,7 @@ async function main() {
         status: s.status,
         dueDate: s.due !== undefined ? keyToDate(addDaysKey(today, s.due)) : null,
         creatorId: s.from.id,
-        assigneeId: s.to.id,
+        assignees: { create: s.to.map((u) => ({ userId: u.id })) },
         completedAt: lastDone ? ago(lastDone.hoursAgo) : null,
         createdAt: ago(s.createdHoursAgo),
       },
@@ -133,7 +134,7 @@ async function main() {
         taskId: task.id,
         userId: s.from.id,
         type: "CREATED",
-        meta: { assigneeId: s.to.id, assigneeName: s.to.name },
+        meta: { assignees: s.to.map((u) => ({ id: u.id, name: u.name })) },
         createdAt: ago(s.createdHoursAgo),
       },
     });

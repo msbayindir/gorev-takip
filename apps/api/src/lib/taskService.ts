@@ -15,22 +15,29 @@ import { HttpError, forbidden, notFound } from "./http";
 import { dateToKey, keyToDate } from "./dates";
 import { taskInclude, toTaskDTO } from "./serialize";
 
-async function activeUser(id: string) {
-  const u = await prisma.user.findUnique({ where: { id } });
-  if (!u) throw new HttpError(400, "Seçilen kişi bulunamadı");
-  if (!u.active) throw new HttpError(400, "Bu kişi artık ekipte değil");
-  return u;
+/** Seçilen kişilerin hepsi var ve ekipte mi? Sırayı korur. */
+async function activeUsers(ids: string[]) {
+  const users = await prisma.user.findMany({ where: { id: { in: ids } } });
+  const byId = new Map(users.map((u) => [u.id, u]));
+  return ids.map((id) => {
+    const u = byId.get(id);
+    if (!u) throw new HttpError(400, "Seçilen kişilerden biri bulunamadı");
+    if (!u.active) throw new HttpError(400, `${u.name} artık ekipte değil`);
+    return u;
+  });
 }
 
 async function loadTask(id: string) {
-  const t = await prisma.task.findUnique({ where: { id }, include: { assignee: true } });
+  const t = await prisma.task.findUnique({ where: { id }, include: { assignees: { include: { user: true } } } });
   if (!t) throw notFound("Görev");
-  return t;
+  return { ...t, assigneeIds: t.assignees.map((a) => a.userId) };
 }
+
+const nameList = (users: { id: string; name: string }[]) => users.map((u) => ({ id: u.id, name: u.name }));
 
 export async function createTask(actor: User, raw: unknown) {
   const input = createTaskSchema.parse(raw);
-  const assignee = await activeUser(input.assigneeId);
+  const people = await activeUsers(input.assigneeIds);
   const task = await prisma.$transaction(async (tx) => {
     const t = await tx.task.create({
       data: {
@@ -38,12 +45,12 @@ export async function createTask(actor: User, raw: unknown) {
         description: input.description?.trim() || null,
         dueDate: input.dueDate ? keyToDate(input.dueDate) : null,
         creatorId: actor.id,
-        assigneeId: assignee.id,
+        assignees: { create: people.map((u) => ({ userId: u.id })) },
       },
       include: taskInclude,
     });
     await tx.activity.create({
-      data: { taskId: t.id, userId: actor.id, type: "CREATED", meta: { assigneeId: assignee.id, assigneeName: assignee.name } },
+      data: { taskId: t.id, userId: actor.id, type: "CREATED", meta: { assignees: nameList(people) } },
     });
     return t;
   });
@@ -52,7 +59,7 @@ export async function createTask(actor: User, raw: unknown) {
 
 type Draft = { type: ActivityType; meta?: Prisma.InputJsonValue; message?: string | null };
 
-/** Başlık, açıklama, sorumlu, son tarih. Yalnızca görevi veren kişi ya da yönetici. */
+/** Başlık, açıklama, yapanlar, son tarih. Yalnızca görevi veren kişi ya da yönetici. */
 export async function updateTask(actor: User, taskId: string, raw: unknown) {
   const input = updateTaskSchema.parse(raw);
   const current = await loadTask(taskId);
@@ -60,6 +67,8 @@ export async function updateTask(actor: User, taskId: string, raw: unknown) {
 
   const data: Prisma.TaskUncheckedUpdateInput = {};
   const drafts: Draft[] = [];
+  let addIds: string[] = [];
+  let removeIds: string[] = [];
 
   if (input.title !== undefined && input.title !== current.title) {
     data.title = input.title;
@@ -72,10 +81,14 @@ export async function updateTask(actor: User, taskId: string, raw: unknown) {
       drafts.push({ type: "DESCRIPTION" });
     }
   }
-  if (input.assigneeId !== undefined && input.assigneeId !== current.assigneeId) {
-    const next = await activeUser(input.assigneeId);
-    data.assigneeId = next.id;
-    drafts.push({ type: "ASSIGNEE", meta: { fromId: current.assigneeId, fromName: current.assignee.name, toId: next.id, toName: next.name } });
+  if (input.assigneeIds !== undefined) {
+    addIds = input.assigneeIds.filter((id) => !current.assigneeIds.includes(id));
+    removeIds = current.assigneeIds.filter((id) => !input.assigneeIds!.includes(id));
+    if (addIds.length || removeIds.length) {
+      const added = await activeUsers(addIds);
+      const removed = current.assignees.filter((a) => removeIds.includes(a.userId)).map((a) => a.user);
+      drafts.push({ type: "ASSIGNEE", meta: { added: nameList(added), removed: nameList(removed) } });
+    }
   }
   if (input.dueDate !== undefined) {
     const prev = dateToKey(current.dueDate);
@@ -90,7 +103,9 @@ export async function updateTask(actor: User, taskId: string, raw: unknown) {
     return toTaskDTO(await prisma.task.findUniqueOrThrow({ where: { id: taskId }, include: taskInclude }));
   }
   const updated = await prisma.$transaction(async (tx) => {
-    const t = await tx.task.update({ where: { id: taskId }, data, include: taskInclude });
+    if (removeIds.length) await tx.taskAssignee.deleteMany({ where: { taskId, userId: { in: removeIds } } });
+    if (addIds.length) await tx.taskAssignee.createMany({ data: addIds.map((userId) => ({ taskId, userId })) });
+    const t = await tx.task.update({ where: { id: taskId }, data: { ...data, updatedAt: new Date() }, include: taskInclude });
     await tx.activity.createMany({
       data: drafts.map((d) => ({ taskId, userId: actor.id, type: d.type, message: d.message ?? null, meta: d.meta })),
     });
@@ -99,11 +114,11 @@ export async function updateTask(actor: User, taskId: string, raw: unknown) {
   return toTaskDTO(updated);
 }
 
-/** Başla / Tamamla / Geri al. Yalnızca görevi yapan kişi. */
+/** Başla / Tamamla / Geri al. Yalnızca görevi yapanlardan biri; durum hepsi için ortaktır. */
 export async function changeStatus(actor: User, taskId: string, raw: unknown) {
   const input = statusChangeSchema.parse(raw);
   const current = await loadTask(taskId);
-  if (!canChangeStatus(actor, current)) throw forbidden("Bu görevin durumunu yalnızca görevi yapan kişi değiştirebilir");
+  if (!canChangeStatus(actor, current)) throw forbidden("Bu görevin durumunu yalnızca görevi yapanlar değiştirebilir");
   if (input.status === current.status) {
     return toTaskDTO(await prisma.task.findUniqueOrThrow({ where: { id: taskId }, include: taskInclude }));
   }
@@ -127,11 +142,11 @@ export async function changeStatus(actor: User, taskId: string, raw: unknown) {
   return toTaskDTO(updated);
 }
 
-/** Not ekle. Görevi yapan, veren ya da yönetici. */
+/** Not ekle. Görevi yapanlar, veren ya da yönetici. */
 export async function addNote(actor: User, taskId: string, raw: unknown) {
   const { message } = noteSchema.parse(raw);
   const current = await loadTask(taskId);
-  if (!canAddNote(actor, current)) throw forbidden("Bu göreve yalnızca görevi yapan, veren ya da yönetici not ekleyebilir");
+  if (!canAddNote(actor, current)) throw forbidden("Bu göreve yalnızca görevi yapanlar, veren ya da yönetici not ekleyebilir");
   await prisma.$transaction([
     prisma.activity.create({ data: { taskId, userId: actor.id, type: "COMMENT", message } }),
     prisma.task.update({ where: { id: taskId }, data: { updatedAt: new Date() } }),

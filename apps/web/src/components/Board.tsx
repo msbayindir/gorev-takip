@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { TASK_STATUSES, STATUS_META, canChangeStatus, type TaskDTO, type TaskStatus } from "@gorev/shared";
+import { TASK_STATUSES, STATUS_META, canChangeStatus, permTask, type TaskDTO, type TaskStatus } from "@gorev/shared";
 import { useTaskDrawer } from "@/hooks/useTaskDrawer";
 import { useSession } from "@/hooks/useSession";
 import { cn } from "@/lib/utils";
 import { DueText, StatusPill } from "./TaskIcons";
 import { useStatusActions } from "./useStatusActions";
+import { whoText } from "./TaskRow";
 
 const DONE_LIMIT = 20;
 
@@ -16,7 +17,7 @@ export function Board({ tasks, show }: { tasks: TaskDTO[]; show: "from" | "to" }
   const act = useStatusActions();
   const [over, setOver] = useState<TaskStatus | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
-  const isMine = (t: TaskDTO) => canChangeStatus(me, { creatorId: t.creator.id, assigneeId: t.assignee.id });
+  const isMine = (t: TaskDTO) => canChangeStatus(me, permTask(t));
 
   const column = (s: TaskStatus) => {
     const list = tasks.filter((t) => t.status === s);
@@ -79,7 +80,7 @@ function Card({
   const me = useSession();
   const drawer = useTaskDrawer();
   const done = task.status === "DONE";
-  const who = show === "from" ? `Veren: ${task.creator.id === me.id ? "Sen" : task.creator.name}` : task.assignee.id === me.id ? "Sen" : task.assignee.name;
+  const who = whoText(task, show, me.id);
   return (
     <article
       draggable={draggable}

@@ -21,7 +21,8 @@ export interface TaskDTO {
   status: TaskStatus;
   dueDate: string | null; // YYYY-MM-DD
   creator: UserLite;
-  assignee: UserLite;
+  /** Görevi yapan kişiler (en az bir); durum hepsi için ortaktır */
+  assignees: UserLite[];
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;

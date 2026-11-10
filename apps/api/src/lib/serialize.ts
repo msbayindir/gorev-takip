@@ -19,10 +19,10 @@ export function toUserLite(u: UserLiteRow): UserLite {
 
 export const taskInclude = {
   creator: { select: userLiteSelect },
-  assignee: { select: userLiteSelect },
+  assignees: { select: { user: { select: userLiteSelect } }, orderBy: { createdAt: "asc" as const } },
 } as const;
 
-type TaskRow = Task & { creator: UserLiteRow; assignee: UserLiteRow };
+type TaskRow = Task & { creator: UserLiteRow; assignees: { user: UserLiteRow }[] };
 
 export function toTaskDTO(t: TaskRow): TaskDTO {
   return {
@@ -33,7 +33,7 @@ export function toTaskDTO(t: TaskRow): TaskDTO {
     status: t.status,
     dueDate: dateToKey(t.dueDate),
     creator: toUserLite(t.creator),
-    assignee: toUserLite(t.assignee),
+    assignees: t.assignees.map((a) => toUserLite(a.user)),
     completedAt: t.completedAt?.toISOString() ?? null,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),

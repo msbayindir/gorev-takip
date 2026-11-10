@@ -6,8 +6,9 @@ import { useCreateTask, useUsers } from "@/lib/queries";
 import { errorMessage } from "@/lib/api";
 import { useSession } from "@/hooks/useSession";
 import { useTaskDrawer } from "@/hooks/useTaskDrawer";
-import { cn, todayKey } from "@/lib/utils";
+import { cn, peopleText, todayKey } from "@/lib/utils";
 import { useToast } from "./Toast";
+import { PeoplePicker } from "./PeoplePicker";
 import { Button, ErrorBox } from "./ui";
 
 type When = "" | "today" | "tomorrow" | "pick";
@@ -24,12 +25,12 @@ export function NewTaskForm({ autoFocus, bare, onCreated }: { autoFocus?: boolea
   const toast = useToast();
   const drawer = useTaskDrawer();
   const [title, setTitle] = useState("");
-  const [assigneeId, setAssigneeId] = useState(me.id);
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([me.id]);
   const [when, setWhen] = useState<When>("");
   const [picked, setPicked] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const others = useMemo(() => users.filter((u) => u.id !== me.id), [users, me.id]);
+  const people = useMemo(() => (users.some((u) => u.id === me.id) ? users : [me, ...users]), [users, me]);
   const today = todayKey();
   const dueDate = when === "today" ? today : when === "tomorrow" ? addDaysKey(today, 1) : when === "pick" && picked ? picked : null;
 
@@ -40,12 +41,18 @@ export function NewTaskForm({ autoFocus, bare, onCreated }: { autoFocus?: boolea
       setError("Ne yapılacağını yaz.");
       return;
     }
+    if (!assigneeIds.length) {
+      setError("Görevi en az bir kişiye ver.");
+      return;
+    }
     try {
-      const task = await create.mutateAsync({ title: title.trim(), assigneeId, dueDate });
+      const task = await create.mutateAsync({ title: title.trim(), assigneeIds, dueDate });
       setTitle("");
       setWhen("");
       setPicked("");
-      toast(task.assignee.id === me.id ? "Görev eklendi." : `Görev ${task.assignee.name} kişisine verildi.`, {
+      setAssigneeIds([me.id]);
+      const onlyMe = task.assignees.length === 1 && task.assignees[0].id === me.id;
+      toast(onlyMe ? "Görev eklendi." : `Görev verildi: ${peopleText(task.assignees, me.id)}.`, {
         action: { label: "Aç", onClick: () => drawer.open(task.number) },
       });
       onCreated?.(task);
@@ -61,17 +68,12 @@ export function NewTaskForm({ autoFocus, bare, onCreated }: { autoFocus?: boolea
           <span className="text-[15px] font-bold text-ink">Ne yapılacak?</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus={autoFocus} placeholder="Örn: Teklif dosyasını hazırla" className={field} />
         </label>
-        <label className="flex min-w-0 flex-[1_1_180px] flex-col gap-1.5 sm:flex-[0_1_210px]">
-          <span className="text-[15px] font-bold text-ink">Kime?</span>
-          <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className={cn(field, "cursor-pointer pr-9")}>
-            <option value={me.id}>Ben</option>
-            {others.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex min-w-0 flex-[1_1_180px] flex-col gap-1.5 sm:flex-[0_1_230px]">
+          <span id={`${id}-kime`} className="text-[15px] font-bold text-ink">
+            Kime?
+          </span>
+          <PeoplePicker users={people} meId={me.id} value={assigneeIds} onChange={setAssigneeIds} labelledBy={`${id}-kime`} />
+        </div>
         <label className="flex min-w-0 flex-[1_1_150px] flex-col gap-1.5 sm:flex-[0_1_170px]">
           <span className="text-[15px] font-bold text-ink">Ne zamana?</span>
           <select value={when} onChange={(e) => setWhen(e.target.value as When)} className={cn(field, "cursor-pointer pr-9")}>

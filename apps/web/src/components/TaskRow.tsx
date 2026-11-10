@@ -1,30 +1,33 @@
 "use client";
 
-import { canChangeStatus, type TaskDTO } from "@gorev/shared";
+import { canChangeStatus, permTask, type TaskDTO } from "@gorev/shared";
 import { useSession } from "@/hooks/useSession";
 import { useTaskDrawer } from "@/hooks/useTaskDrawer";
-import { cn, timeAgo } from "@/lib/utils";
+import { cn, peopleText, timeAgo } from "@/lib/utils";
 import { DueText, StatusPill } from "./TaskIcons";
 import { TaskActions } from "./TaskActions";
 
+/** Satırın bilgi metni: kimden geldi ya da kim yapıyor */
+export function whoText(task: TaskDTO, show: "from" | "to", meId: string): string {
+  if (show === "to") return `Yapan: ${peopleText(task.assignees, meId)}`;
+  const giver = `Veren: ${task.creator.id === meId ? "Sen" : task.creator.name}`;
+  const others = task.assignees.filter((a) => a.id !== meId);
+  const amIn = others.length < task.assignees.length;
+  if (!amIn) return `${giver} · Yapan: ${peopleText(task.assignees, meId)}`;
+  return others.length ? `${giver} · Birlikte: ${peopleText(others, meId)}` : giver;
+}
+
 /**
  * Bir görev satırı. Bilgi satırı kime göre değişir:
- *  - "from": Veren: Ayşe · Yarın   (bana verilenler)
- *  - "to":   Mehmet yapacak · Yarın (benim verdiklerim, ekip)
+ *  - "from": Veren: Ayşe · Birlikte: Mehmet · Yarın   (bana verilenler)
+ *  - "to":   Yapan: Mehmet Demir, Zeynep Kaya · Yarın  (benim verdiklerim)
  */
 export function TaskRow({ task, show = "from", status }: { task: TaskDTO; show?: "from" | "to"; status?: boolean }) {
   const me = useSession();
   const drawer = useTaskDrawer();
-  const mine = canChangeStatus(me, { creatorId: task.creator.id, assigneeId: task.assignee.id });
+  const mine = canChangeStatus(me, permTask(task));
   const done = task.status === "DONE";
-  const who =
-    show === "from"
-      ? `Veren: ${task.creator.id === me.id ? "Sen" : task.creator.name}`
-      : task.assignee.id === me.id
-        ? done
-          ? "Sen yaptın"
-          : "Sen yapacaksın"
-        : `${task.assignee.name} ${done ? "yaptı" : "yapacak"}`;
+  const who = whoText(task, show, me.id);
 
   return (
     <div

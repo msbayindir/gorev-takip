@@ -46,19 +46,19 @@ Tarih vurgusu: gecikmiş `danger` / `danger-soft`, bugün `status-blocked-ink` /
 
 ## Bileşen kuralları
 
-- **Görev ver formu:** tek satır. "Ne yapılacak?" alanı, "Kime?" seçimi (varsayılan "Ben"), isteğe bağlı "Ne zamana?" (Bugün, Yarın ya da tarih seç) ve "Ekle" düğmesi. Görevlerim'in üstünde durur; "Görev ver" düğmesiyle pencerede de açılır.
-- **Görev satırı:** başlık `body`; altında `small` + `ink-muted` tek bilgi satırı. Sağda durum etiketi; görevi yapan kişiyse yanında eylem düğmeleri: Yapılacak → "Başla" + "Tamamla", Devam ediyor → "Tamamla", Tamamlandı → "Geri al".
+- **Görev ver formu:** tek satır. "Ne yapılacak?" alanı, "Kime?" seçimi (varsayılan "Ben"; bir ya da birden fazla kişi, onay kutularıyla), isteğe bağlı "Ne zamana?" (Bugün, Yarın ya da tarih seç) ve "Ekle" düğmesi. Görevlerim'in üstünde durur; "Görev ver" düğmesiyle pencerede de açılır.
+- **Görev satırı:** başlık `body`; altında `small` + `ink-muted` tek bilgi satırı ("Veren: Ayşe · Birlikte: Mehmet · Yarın" ya da "Yapan: Ayşe Yılmaz, Mehmet Demir · Yarın"). Sağda durum etiketi; bakan kişi görevi yapanlardansa yanında eylem düğmeleri: Yapılacak → "Başla" + "Tamamla", Devam ediyor → "Tamamla", Tamamlandı → "Geri al".
 - **Durum etiketi:** simge + kelime, `label`, `radius-sm`; tıklanmaz, yalnızca gösterir.
-- **Pano:** üç kolon (Yapılacak, Devam ediyor, Tamamlandı). Kart yalnızca görevi yapan kişi için sürüklenir.
+- **Pano:** üç kolon (Yapılacak, Devam ediyor, Tamamlandı). Kart yalnızca görevi yapanlar için sürüklenir.
 - **Görev detayı:** başlık; "Veren → Yapan", "Son tarih", durum; eylem düğmeleri (yalnızca yapan kişi); açıklama; "Not ekle" kutusu; geçmiş. Görevi veren kişi ya da yönetici "Düzenle" ve "Sil"i görür.
 - **Açılır menü:** sayfanın üst katmanında, tetikleyicinin hemen altında ya da yer yoksa üstünde açılır; en fazla ekran yüksekliği kadar uzar, fazlası kaydırılır.
 - **Odak:** klavyeyle gezinmede `accent` renginde 2px halka, 2px boşlukla.
 
 ## Yetki
 
-- Durumu yalnızca görevi yapan kişi değiştirir (yönetici ve görevi veren de değiştiremez).
+- Durumu yalnızca görevi yapanlar değiştirir (yönetici ve görevi veren de değiştiremez). Birden fazla kişiye verilen görevde durum ortaktır; bu kişilerden herhangi biri değiştirebilir.
 - Düzenleme ve silme: görevi veren kişi ya da yönetici.
-- Not: görevi yapan, veren ya da yönetici.
+- Not: görevi yapanlar, veren ya da yönetici.
 
 ## Simgeler
 
